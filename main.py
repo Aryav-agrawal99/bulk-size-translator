@@ -5,48 +5,38 @@ from PIL import Image, ImageDraw
 import numpy as np
 import io
 
-# Initialize EasyOCR and Google Translator
+# Load EasyOCR reader (Chinese and English)
 reader = easyocr.Reader(['ch_sim', 'en'], gpu=False)
 translator = GoogleTranslator(source='chinese', target='english')
 
 def translate_image(image):
     image_array = np.array(image.convert("RGB"))
     results = reader.readtext(image_array)
-
     draw = ImageDraw.Draw(image)
 
     for (bbox, text, prob) in results:
         try:
             translated_text = translator.translate(text)
+            top_left = tuple(map(int, bbox[0]))
+            bottom_right = tuple(map(int, bbox[2]))
+            draw.rectangle([top_left, bottom_right], fill="white")
+            draw.text(top_left, translated_text, fill="black")
         except Exception as e:
-            translated_text = "[Error]"
-
-        top_left = tuple(map(int, bbox[0]))
-        bottom_right = tuple(map(int, bbox[2]))
-        
-        draw.rectangle([top_left, bottom_right], fill="white")
-        draw.text(top_left, translated_text, fill="black")
+            print(f"Translation failed for '{text}': {e}")
 
     return image
 
-# Streamlit UI
 st.title("🈺 Size Chart Translator (Chinese → English)")
-uploaded_files = st.file_uploader(
-    "Upload size chart images (JPG/PNG)", 
-    accept_multiple_files=True, 
-    type=["jpg", "jpeg", "png"]
-)
+uploaded_files = st.file_uploader("Upload size chart images (JPG/PNG)", accept_multiple_files=True, type=["jpg", "jpeg", "png"])
 
 if uploaded_files:
     for uploaded_file in uploaded_files:
         image = Image.open(uploaded_file)
         translated_image = translate_image(image.copy())
-
         st.image(translated_image, caption="Translated Image", use_column_width=True)
 
         img_byte_arr = io.BytesIO()
         translated_image.save(img_byte_arr, format='JPEG')
-
         st.download_button(
             label="Download Translated Image",
             data=img_byte_arr.getvalue(),
