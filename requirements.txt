@@ -1,6 +1,5 @@
-streamlit
-pillow
+streamlit==1.29.0
+Pillow
+easyocr
 numpy
-opencv-python-headless
-pytesseract
-deep-translator
+deep_translator
