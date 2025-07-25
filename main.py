@@ -1,37 +1,50 @@
 import streamlit as st
-import os
-import cv2
-import numpy as np
-from PIL import Image, ImageDraw, ImageFont
-import pytesseract
+import easyocr
 from deep_translator import GoogleTranslator
+from PIL import Image, ImageDraw, ImageFont
+import numpy as np
+import io
 
-def translate_text(text):
-    return GoogleTranslator(source='auto', target='en').translate(text)
+# Load EasyOCR reader (Chinese and English)
+reader = easyocr.Reader(['ch_sim', 'en'])
 
-def process_image(image):
-    img = np.array(image)
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    data = pytesseract.image_to_data(gray, lang='chi_sim', output_type=pytesseract.Output.DICT)
+translator = GoogleTranslator(source='chinese', target='english')
 
-    for i in range(len(data['text'])):
-        if int(data['conf'][i]) > 60:
-            x, y, w, h = data['left'][i], data['top'][i], data['width'][i], data['height'][i]
-            original = data['text'][i]
-            translated = translate_text(original)
-            cv2.rectangle(img, (x, y), (x + w, y + h), (255, 255, 255), -1)
-            font_scale = 0.5
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            cv2.putText(img, translated, (x, y + h - 5), font, font_scale, (0, 0, 0), 1, cv2.LINE_AA)
-    
-    return img
+def translate_image(image):
+    image_array = np.array(image.convert("RGB"))
+    results = reader.readtext(image_array)
 
-st.title("🈶 Bulk Size Chart Translator")
-uploaded_files = st.file_uploader("Upload Chinese Size Chart Images", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
+    draw = ImageDraw.Draw(image)
+
+    for (bbox, text, prob) in results:
+        translated_text = translator.translate(text)
+        top_left = tuple(map(int, bbox[0]))
+        bottom_right = tuple(map(int, bbox[2]))
+        
+        # Draw white box to cover old text
+        draw.rectangle([top_left, bottom_right], fill="white")
+
+        # Draw translated text
+        draw.text(top_left, translated_text, fill="black")
+
+    return image
+
+st.title("🈺 Size Chart Translator (Chinese → English)")
+uploaded_files = st.file_uploader("Upload size chart images (JPG/PNG)", accept_multiple_files=True, type=["jpg", "jpeg", "png"])
 
 if uploaded_files:
-    for file in uploaded_files:
-        image = Image.open(file).convert('RGB')
-        st.image(image, caption="Original", use_column_width=True)
-        translated_img = process_image(image)
-        st.image(translated_img, caption="Translated", use_column_width=True)
+    for uploaded_file in uploaded_files:
+        image = Image.open(uploaded_file)
+        translated_image = translate_image(image.copy())
+
+        st.image(translated_image, caption="Translated Image", use_column_width=True)
+
+        # Download option
+        img_byte_arr = io.BytesIO()
+        translated_image.save(img_byte_arr, format='JPEG')
+        st.download_button(
+            label="Download Translated Image",
+            data=img_byte_arr.getvalue(),
+            file_name=f"translated_{uploaded_file.name}",
+            mime="image/jpeg"
+        )
