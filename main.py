@@ -1,13 +1,12 @@
 import streamlit as st
 import easyocr
 from deep_translator import GoogleTranslator
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 import numpy as np
 import io
 
-# Load EasyOCR reader (Chinese and English)
-reader = easyocr.Reader(['ch_sim', 'en'])
-
+# Initialize EasyOCR and Google Translator
+reader = easyocr.Reader(['ch_sim', 'en'], gpu=False)
 translator = GoogleTranslator(source='chinese', target='english')
 
 def translate_image(image):
@@ -17,20 +16,26 @@ def translate_image(image):
     draw = ImageDraw.Draw(image)
 
     for (bbox, text, prob) in results:
-        translated_text = translator.translate(text)
+        try:
+            translated_text = translator.translate(text)
+        except Exception as e:
+            translated_text = "[Error]"
+
         top_left = tuple(map(int, bbox[0]))
         bottom_right = tuple(map(int, bbox[2]))
         
-        # Draw white box to cover old text
         draw.rectangle([top_left, bottom_right], fill="white")
-
-        # Draw translated text
         draw.text(top_left, translated_text, fill="black")
 
     return image
 
+# Streamlit UI
 st.title("🈺 Size Chart Translator (Chinese → English)")
-uploaded_files = st.file_uploader("Upload size chart images (JPG/PNG)", accept_multiple_files=True, type=["jpg", "jpeg", "png"])
+uploaded_files = st.file_uploader(
+    "Upload size chart images (JPG/PNG)", 
+    accept_multiple_files=True, 
+    type=["jpg", "jpeg", "png"]
+)
 
 if uploaded_files:
     for uploaded_file in uploaded_files:
@@ -39,9 +44,9 @@ if uploaded_files:
 
         st.image(translated_image, caption="Translated Image", use_column_width=True)
 
-        # Download option
         img_byte_arr = io.BytesIO()
         translated_image.save(img_byte_arr, format='JPEG')
+
         st.download_button(
             label="Download Translated Image",
             data=img_byte_arr.getvalue(),
